@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 
@@ -15,6 +16,9 @@ from traig_client.client import (
 
 
 def clear_previous_game_logs():
+    if not os.path.isdir('./logs'):
+        os.mkdir('./logs')
+
     for name in os.listdir('./logs'):
         if name.endswith('.joblib'):
             os.unlink(os.path.join('./logs', name))
@@ -28,6 +32,8 @@ def init_traig_client():
         n_moves=TraigMetricTypeEnum.count.value,
         who_won=TraigMetricTypeEnum.value.value
     )
+
+    logging.debug(f'traig client is {get_client()}')
 
 
 def play_game(player_1: Player, player_2: Player):

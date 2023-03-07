@@ -8,8 +8,10 @@ from heuristics.sliding import build_heuristic
 from player.base import Player
 from board import Board
 
-import traig_client
-from traig_client.client import MetricTypeEnum as TraigMetricTypeEnum
+from traig_client.client import (
+    get_client,
+    MetricTypeEnum as TraigMetricTypeEnum
+)
 
 
 def clear_previous_game_logs():
@@ -19,7 +21,7 @@ def clear_previous_game_logs():
 
 
 def init_traig_client():
-    traig_client.get_client().init_metrics(
+    get_client().init_metrics(
         player_X_mean_move_time=TraigMetricTypeEnum.mean.value,
         player_O_mean_move_time=TraigMetricTypeEnum.mean.value,
         mean_move_time=TraigMetricTypeEnum.mean.value,
@@ -72,7 +74,7 @@ def play_game(player_1: Player, player_2: Player):
         print(f'Mean time for move for player {players_chars[current_player.color]} '
               f'= {np.mean(players_timers[current_player.color])}')
 
-        traig_client.get_client().update_metrics(
+        get_client().update_metrics(
             **{
                 f'player_{players_chars[current_player.color]}_mean_move_time': players_timers[current_player.color][-1],
                 'mean_move_time': players_timers[current_player.color][-1],
@@ -91,7 +93,7 @@ def play_game(player_1: Player, player_2: Player):
         current_player_idx = (current_player_idx + 1) % 2
 
     print(f'Game finished, player "{players_chars[winner_color]}" won!')
-    traig_client.get_client().update_metrics(who_won=players_chars[winner_color])
+    get_client().update_metrics(who_won=players_chars[winner_color])
     board.print_board(players_chars)
 
 

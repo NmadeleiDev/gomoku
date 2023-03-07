@@ -2,3 +2,5 @@ services:
   traigsession:
     build:
       context: .
+    environment:
+      TRAIG_SESSION: '1'

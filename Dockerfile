@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r /app/requirements.txt --disable-pip-version-ch
 
 COPY . /app
 
-CMD python main.py
+CMD python main.py -p1 AI -p2 AI

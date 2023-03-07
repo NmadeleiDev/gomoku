@@ -1,0 +1,4 @@
+services:
+  traigsession:
+    build:
+      context: .

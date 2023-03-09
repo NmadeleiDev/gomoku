@@ -82,8 +82,9 @@ def play_game(player_1: Player, player_2: Player):
 
         get_client().update_metrics(
             **{
-                f'player_{players_chars[current_player.color]}_mean_move_time': players_timers[current_player.color][-1],
-                'mean_move_time': players_timers[current_player.color][-1],
+                f'player_{players_chars[current_player.color]}_mean_move_time': (
+                    players_timers[current_player.color][-1]).total_seconds(),
+                'mean_move_time': players_timers[current_player.color][-1].total_seconds(),
                 'n_moves': 1
                })
 

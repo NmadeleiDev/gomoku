@@ -19,15 +19,18 @@ def init_logging():
 def create_players(p_types: list[Literal["human", "AI"]]) -> tuple[Player, Player]:
     player_colors = [1, -1]
 
-    p_types_dict = {"human": HumanPlayer, "AI": AIPlayer, }
+    p_types_dict = {
+        "human": HumanPlayer,
+        "AI": AIPlayer,
+    }
 
     return tuple([p_types_dict[p_type](player_colors.pop()) for p_type in p_types])
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--player1', '-p1', type=str, dest='p1', default='human')
-    parser.add_argument('--player2', '-p2', type=str, dest='p2', default='AI')
+    parser.add_argument("--player1", "-p1", type=str, dest="p1", default="human")
+    parser.add_argument("--player2", "-p2", type=str, dest="p2", default="AI")
     return parser.parse_args()
 
 
@@ -38,5 +41,5 @@ def main():
     start_game(*create_players([args.p1, args.p2]))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

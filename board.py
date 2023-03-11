@@ -1,13 +1,24 @@
 from __future__ import annotations
 
-from functools import cached_property
 from hashlib import md5
 from typing import Optional
 
 import numpy as np
 import tabulate
 
-unary_step_vectors = np.array([[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1], ], dtype=int)
+unary_step_vectors = np.array(
+    [
+        [1, 0],
+        [0, 1],
+        [-1, 0],
+        [0, -1],
+        [1, 1],
+        [1, -1],
+        [-1, 1],
+        [-1, -1],
+    ],
+    dtype=int,
+)
 
 center_square_points = None
 
@@ -34,15 +45,19 @@ class Board:
 
     def get_board_after_move(self, x: int, y: int, color: int) -> Board:
         if not self.is_point_empty(x, y):
-            raise ValueError('illegal move')
+            raise ValueError("illegal move")
         result = self.position.copy()
         result.flags.writeable = True
         result[x, y] = color
         return Board(result, move_idx=self.move_idx + 1)
 
-    def get_point_neighbours_to_all_directions(self, x: int, y: int, at_distance=1) -> np.ndarray:
+    def get_point_neighbours_to_all_directions(
+        self, x: int, y: int, at_distance=1
+    ) -> np.ndarray:
         result = unary_step_vectors * at_distance + np.array([[x, y]], dtype=int)
-        return result[np.apply_along_axis(lambda p: self.is_point_on_board(*p), 1, result)]
+        return result[
+            np.apply_along_axis(lambda p: self.is_point_on_board(*p), 1, result)
+        ]
 
     def get_center_square_points(self) -> np.ndarray:
         global center_square_points
@@ -55,10 +70,13 @@ class Board:
         middle = np.array([middle, middle], dtype=int)
 
         if self.position.shape[0] % 2 == 0:
-            center_square_points = np.concatenate([middle[np.newaxis, :], unary_step_vectors[[1, 3, 5]] + middle],
-                                                  axis=0)
+            center_square_points = np.concatenate(
+                [middle[np.newaxis, :], unary_step_vectors[[1, 3, 5]] + middle], axis=0
+            )
         else:
-            center_square_points = np.concatenate([middle[np.newaxis, :], unary_step_vectors + middle], axis=0)
+            center_square_points = np.concatenate(
+                [middle[np.newaxis, :], unary_step_vectors + middle], axis=0
+            )
 
         return center_square_points
 
@@ -79,7 +97,11 @@ class Board:
         board_position_copy = self.position.copy().astype(object)
         board_position_copy.flags.writeable = True
 
-        for color, char in (players_chars | {0: '.'}).items():
+        for color, char in (players_chars | {0: "."}).items():
             board_position_copy[board_position_copy == color] = char
 
-        print(tabulate.tabulate(board_position_copy, headers='keys', stralign='center', showindex=True))
+        print(
+            tabulate.tabulate(
+                board_position_copy, headers="keys", stralign="center", showindex=True
+            )
+        )

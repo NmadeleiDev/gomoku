@@ -14,7 +14,7 @@ class Player(ABC):
         self.h = build_heuristic(self.color)
 
     def get_move(self, position: Board) -> tuple[int, int]:
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def start_game(self):
         pass

@@ -129,6 +129,10 @@ def start_game(player_1: Player, player_2: Player):
         print("KeyboardInterrupt detected, clearing resources and exiting...")
         player_1.end_game()
         player_2.end_game()
+    except Exception as e:
+        logging.exception(e)
+        player_1.end_game()
+        player_2.end_game()
 
     player_1.end_game()
     player_2.end_game()

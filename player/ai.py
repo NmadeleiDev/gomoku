@@ -2,6 +2,9 @@ import os
 
 # from concurrent.futures import ProcessPoolExecutor as Pool
 from functools import cache, partial
+from multiprocessing import Manager
+from multiprocessing.managers import ValueProxy
+from multiprocessing.pool import AsyncResult
 
 import numpy as np
 from cachetools import cached
@@ -14,9 +17,16 @@ from player.base import Player
 whos_win_h = build_heuristic(None, "bin")
 
 
-class ValueStub:
-    def __init__(self, v):
-        self.value = v
+def yield_completed(async_results: list[AsyncResult], positions: list):
+    async_results_dict = {i: v for i, v in enumerate(async_results)}
+    while len(async_results_dict) > 0:
+        to_pop = None
+        for i, as_res in async_results_dict.items():
+            if as_res.ready():
+                to_pop = i
+                yield as_res.get(), positions[i]
+        if to_pop is not None:
+            async_results_dict.pop(to_pop)
 
 
 @cache
@@ -59,8 +69,8 @@ def get_next_positions(board: Board, color: int, h=None) -> list[Board]:
 def minimax(
     is_maximizer: bool,
     depth: int,
-    alpha: float,
-    beta: float,
+    alpha: float | ValueProxy,
+    beta: float | ValueProxy,
     maximizer_color: int,
     minimizer_color: int,
     h_func,
@@ -91,28 +101,58 @@ def minimax(
     this_layer_best_score = -win_value
     this_layer_best_next_move = None
 
+    if pool is None and isinstance(alpha, ValueProxy):
+        alpha = alpha.value
+        beta = beta.value
+
     if is_maximizer:
-        for next_position in next_positions:
-            score, _ = minimax(
-                not is_maximizer,
-                depth - 1,
-                alpha,
-                beta,
-                maximizer_color,
-                minimizer_color,
-                h_func,
-                next_position,
-            )
+        if pool is not None:
+            results = [pool.apply_async(
+                minimax,
+                args=(
+                    not is_maximizer,
+                    depth - 1,
+                    alpha,
+                    beta,
+                    maximizer_color,
+                    minimizer_color,
+                    h_func,
+                    next_position,
+                )) for next_position in next_positions]
 
-            if score > this_layer_best_score:
-                this_layer_best_score = score
-                this_layer_best_next_move = next_position.from_move
+            for (score, _), next_position in yield_completed(results, next_positions):
+                if score > this_layer_best_score or this_layer_best_next_move is None:
+                    this_layer_best_score = score
+                    this_layer_best_next_move = next_position.from_move
 
-            if this_layer_best_score > alpha:
-                alpha = this_layer_best_score
+                if this_layer_best_score > alpha.value:
+                    alpha.value = this_layer_best_score
 
-            if beta <= alpha:
-                break
+                if beta.value <= alpha.value:
+                    break
+
+        else:
+            for next_position in next_positions:
+                score, _ = minimax(
+                    not is_maximizer,
+                    depth - 1,
+                    alpha,
+                    beta,
+                    maximizer_color,
+                    minimizer_color,
+                    h_func,
+                    next_position,
+                )
+
+                if score > this_layer_best_score or this_layer_best_next_move is None:
+                    this_layer_best_score = score
+                    this_layer_best_next_move = next_position.from_move
+
+                if this_layer_best_score > alpha:
+                    alpha = this_layer_best_score
+
+                if beta <= alpha:
+                    break
     else:
         for next_position in next_positions:
             score, _ = minimax(
@@ -126,7 +166,7 @@ def minimax(
                 next_position,
             )
 
-            if score < this_layer_best_score:
+            if score < this_layer_best_score or this_layer_best_next_move is None:
                 this_layer_best_score = score
                 this_layer_best_next_move = next_position.from_move
 
@@ -157,27 +197,23 @@ class AIPlayer(Player):
         _, best_next_move = minimax(
             True,
             self.calculation_depth,
-            -np.inf,
-            np.inf,
+            self.manager.Value('i', -np.inf),
+            self.manager.Value('i', np.inf),
             self.color,
             self.opponent_color,
             self.h,
             position,
-            # pool=self.pool
-            pool=None,
+            pool=self.pool
         )
 
         return best_next_move
 
     def start_game(self):
-        # self.manager = Manager()
-        # self.pool = self.manager.Pool(processes=self.max_workers)
+        self.manager = Manager()
+        self.pool = self.manager.Pool(processes=self.max_workers)
         # self.pool = None
         pass
 
     def end_game(self):
-        # self.pool.shutdown()
-        # self.manager.shutdown()
-        # self.pool.join()
+        self.manager.shutdown()
         # self.pool.close()
-        pass

@@ -103,15 +103,20 @@ def play_game(player_1: Player, player_2: Player):
             k: players_hs[k](current_player.color, board) for k in players_chars.keys()
         }
         print(
-            f'Scores are: {", ".join([players_chars[k] + "=" + str(v) for k, v in scores.items()])}\n'
+            f'Scores are: {", ".join([players_chars[k] + "=" + str(v) for k, v in scores.items()])}'
         )
+        print("Captures are:", board.captures)
+        print()
 
         if (winner := winner_heuristic(current_player.color, board)) != 0:
             winner_color = winner
 
+        for color, n_captures in board.captures.items():
+            if n_captures > 10:
+                winner_color = color
+
         move_idx += 1
 
-        # TODO: считать captures, по ним определять победителя
         current_player_idx = (current_player_idx + 1) % 2
 
     print(f'Game finished, player "{players_chars[winner_color]}" won!')

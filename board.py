@@ -28,7 +28,11 @@ class Board:
     size = 20
 
     def __init__(
-        self, position: Optional[np.ndarray] = None, move_idx=0, from_move=None
+        self,
+        position: Optional[np.ndarray] = None,
+        move_idx=0,
+        from_move=None,
+        captures=None,
     ):
         if position is not None:
             self.position = position
@@ -40,6 +44,7 @@ class Board:
         self.move_idx = move_idx
         self.from_move = from_move
         self.h_val = None
+        self.captures = captures or {}
 
     def is_point_on_board(self, x: int, y: int) -> bool:
         return 0 <= x < self.position.shape[0] and 0 <= y < self.position.shape[1]
@@ -64,15 +69,48 @@ class Board:
         result = self.position.copy()
         result.flags.writeable = True
         result[x, y] = color
-        return Board(result, move_idx=self.move_idx + 1, from_move=(x, y))
+        return Board(
+            result, move_idx=self.move_idx + 1, from_move=(x, y), captures=self.captures
+        ).perform_inplace_capture_if_possible()
 
-    def get_point_neighbours_to_all_directions(
-        self, x: int, y: int, at_distance=1
+    def perform_inplace_capture_if_possible(self):
+        x, y = self.from_move
+        move_color = self.position[x, y]
+        capture_pattern = np.array(
+            [move_color, -move_color, -move_color, move_color], dtype=int
+        )
+
+        self.position.flags.writeable = True
+
+        if move_color not in self.captures:
+            self.captures[move_color] = 0
+
+        for idx in np.stack(
+            [
+                self.get_point_neighbours_coords_to_all_directions(
+                    x, y, d, filter_by_on_board=False
+                )
+                for d in range(4)
+            ],
+            axis=1,
+        ):
+            idx_t = idx.T
+            if np.all(self.position[idx_t[0], idx_t[1]] == capture_pattern):
+                self.captures[move_color] += 1
+                self.position[idx_t[0][1:-1], idx_t[1][1:-1]] = self.empty_color
+
+        self.position.flags.writeable = False
+        return self
+
+    def get_point_neighbours_coords_to_all_directions(
+        self, x: int, y: int, at_distance=1, filter_by_on_board=True
     ) -> np.ndarray:
         result = unary_step_vectors * at_distance + np.array([[x, y]], dtype=int)
-        return result[
-            np.apply_along_axis(lambda p: self.is_point_on_board(*p), 1, result)
-        ]
+        return (
+            result[np.apply_along_axis(lambda p: self.is_point_on_board(*p), 1, result)]
+            if filter_by_on_board
+            else result
+        )
 
     def get_center_square_points(self) -> np.ndarray:
         global center_square_points

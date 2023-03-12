@@ -27,7 +27,9 @@ class Board:
     empty_color = 0
     size = 20
 
-    def __init__(self, position: Optional[np.ndarray] = None, move_idx=0):
+    def __init__(
+        self, position: Optional[np.ndarray] = None, move_idx=0, from_move=None
+    ):
         if position is not None:
             self.position = position
         else:
@@ -36,6 +38,8 @@ class Board:
         self.position.flags.writeable = False
         self.hash = None
         self.move_idx = move_idx
+        self.from_move = from_move
+        self.h_val = None
 
     def is_point_on_board(self, x: int, y: int) -> bool:
         return 0 <= x < self.position.shape[0] and 0 <= y < self.position.shape[1]
@@ -43,13 +47,24 @@ class Board:
     def is_point_empty(self, x: int, y: int) -> bool:
         return self.position[x, y] == self.empty_color
 
+    def winner(self, criteria) -> int | None:
+        winner = criteria(None, self)
+        if winner != self.empty_color:
+            return winner
+        else:
+            return None
+
+    def compute_h_for_self(self, h):
+        self.h_val = h(self)
+        return self
+
     def get_board_after_move(self, x: int, y: int, color: int) -> Board:
         if not self.is_point_empty(x, y):
             raise ValueError("illegal move")
         result = self.position.copy()
         result.flags.writeable = True
         result[x, y] = color
-        return Board(result, move_idx=self.move_idx + 1)
+        return Board(result, move_idx=self.move_idx + 1, from_move=(x, y))
 
     def get_point_neighbours_to_all_directions(
         self, x: int, y: int, at_distance=1

@@ -28,6 +28,10 @@ def init_traig_client():
         mean_move_time=TraigMetricTypeEnum.mean.value,
         n_moves=TraigMetricTypeEnum.count.value,
         who_won=TraigMetricTypeEnum.value.value,
+        **{
+            "color_-1_calc_depth": TraigMetricTypeEnum.value.value,
+            "color_1_calc_depth": TraigMetricTypeEnum.value.value,
+        },
     )
 
     logging.debug(f"traig client is {traig_client()}")
@@ -123,6 +127,10 @@ def start_game(player_1: Player, player_2: Player):
         play_game(player_1, player_2)
     except KeyboardInterrupt:
         print("KeyboardInterrupt detected, clearing resources and exiting...")
+        player_1.end_game()
+        player_2.end_game()
+    except Exception as e:
+        logging.exception(e)
         player_1.end_game()
         player_2.end_game()
 

@@ -34,7 +34,7 @@ def get_next_positions(board: Board, color: int, h=None) -> list[Board]:
     possible_moves_set = set()
 
     for stone_coords in np.argwhere(board.position != board.empty_color):
-        for neighbour_coords in board.get_point_neighbours_to_all_directions(
+        for neighbour_coords in board.get_point_neighbours_coords_to_all_directions(
             *stone_coords
         ):
             if board.is_point_empty(*neighbour_coords):
@@ -107,18 +107,22 @@ def minimax(
 
     if is_maximizer:
         if pool is not None:
-            results = [pool.apply_async(
-                minimax,
-                args=(
-                    not is_maximizer,
-                    depth - 1,
-                    alpha,
-                    beta,
-                    maximizer_color,
-                    minimizer_color,
-                    h_func,
-                    next_position,
-                )) for next_position in next_positions]
+            results = [
+                pool.apply_async(
+                    minimax,
+                    args=(
+                        not is_maximizer,
+                        depth - 1,
+                        alpha,
+                        beta,
+                        maximizer_color,
+                        minimizer_color,
+                        h_func,
+                        next_position,
+                    ),
+                )
+                for next_position in next_positions
+            ]
 
             for (score, _), next_position in yield_completed(results, next_positions):
                 if score > this_layer_best_score or this_layer_best_next_move is None:
@@ -197,13 +201,13 @@ class AIPlayer(Player):
         _, best_next_move = minimax(
             True,
             self.calculation_depth,
-            self.manager.Value('i', -np.inf),
-            self.manager.Value('i', np.inf),
+            self.manager.Value("i", -np.inf),
+            self.manager.Value("i", np.inf),
             self.color,
             self.opponent_color,
             self.h,
             position,
-            pool=self.pool
+            pool=self.pool,
         )
 
         return best_next_move

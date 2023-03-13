@@ -187,7 +187,7 @@ class AIPlayer(Player):
     def __init__(self, color):
         super().__init__(color)
 
-        self.calculation_depth = 3
+        self.calculation_depth = 4
 
         # self.h_for_filter = build_heuristic(self.color, scorer_type="count_with_move")
 

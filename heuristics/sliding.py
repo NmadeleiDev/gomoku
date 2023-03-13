@@ -170,7 +170,7 @@ def apply_heuristic(h_fn, whos_move: int, board: Board):
 def build_heuristic(
     color: int,
     scorer_type: Literal["hamming", "count", "count_with_move", "bin"] = "count",
-) -> Callable[[int, Board], np.float]:
+) -> Callable[[int, Board], float]:
     global straight_line_indices_0, straight_line_indices_1, diag_indices_0, diag_indices_1
 
     if scorer_type == "count":

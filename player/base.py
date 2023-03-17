@@ -1,7 +1,7 @@
 from abc import ABC
 
 from board import Board
-from heuristics.sliding import build_heuristic
+from heuristics.sliding import Heuristics, build_heuristic
 
 
 class Player(ABC):
@@ -11,7 +11,10 @@ class Player(ABC):
         self.color = color
         self.opponent_color = -color
 
-        self.h = build_heuristic(self.color)
+        self.h = build_heuristic(self.color, Heuristics.count)
+        self.free_three_counter = build_heuristic(
+            self.color, Heuristics.free_three, line_len_to_analyze=6
+        )
 
     def get_move(self, position: Board) -> tuple[int, int]:
         raise NotImplementedError()

@@ -1,8 +1,9 @@
 from functools import cache, partial
 from itertools import product
-from typing import Callable, Literal
+from typing import Callable
 
 import numpy as np
+from cachetools import cached
 
 from board import Board
 
@@ -126,7 +127,8 @@ def score_for_line_count(color: int, line: tuple, whos_move: int) -> float:
     return score * (1 if is_this_color_line else -1)
 
 
-def whos_win(line: tuple, whos_move: int) -> int:
+@cached(cache={}, key=lambda color, line, whos_move: (line,))
+def whos_win(color: None, line: tuple, whos_move: None) -> int:
     line = np.array(line, dtype=int)
 
     unique_colors = np.unique(line)
@@ -136,14 +138,42 @@ def whos_win(line: tuple, whos_move: int) -> int:
         return 0
 
 
-@cache
-def apply_heuristic(h_fn, whos_move: int, board: Board):
+@cached(cache={}, key=lambda color, line, whos_move: (line, whos_move))
+def is_free_three(color: None, line: tuple, whos_move: int) -> float:
+    """
+    :param line: tuple длины 6
+    :param color: игнорируется
+    :param whos_move: цвет, free three которого мы ищем
+    :return: 1 если free three есть, 0 если нет
+    """
+    if not (line[0] == Board.empty_color and line[-1] == Board.empty_color):
+        return 0
+
+    n_stones = 0
+    for i in range(1, 5):
+        if line[i] == whos_move:
+            n_stones += 1
+        elif line[i] == Board.empty_color:
+            pass
+        else:
+            return 0
+
+    if n_stones == 3:
+        if line[1] == whos_move and line[-2] == whos_move:
+            return 1
+        else:
+            return 0.5
+    else:
+        return 0
+
+
+def get_unique_lines_from_board(board: Board, line_len_to_analyze=5):
     (
         straight_line_indices_0,
         straight_line_indices_1,
         diag_indices_0,
         diag_indices_1,
-    ) = get_board_sliding_indices()
+    ) = get_board_sliding_indices(line_len_to_analyze)
 
     position = board.position
 
@@ -157,6 +187,19 @@ def apply_heuristic(h_fn, whos_move: int, board: Board):
     )
 
     unique_lines, unique_counts = np.unique(lines, axis=0, return_counts=True)
+    return unique_lines, unique_counts
+
+
+@cache
+def apply_scalar_heuristic(
+    h_fn: Callable[[tuple, int], float],
+    whos_move: int | None,
+    board: Board,
+    line_len_to_analyze=5,
+):
+    unique_lines, unique_counts = get_unique_lines_from_board(
+        board, line_len_to_analyze=line_len_to_analyze
+    )
 
     result = sum(
         [
@@ -167,21 +210,21 @@ def apply_heuristic(h_fn, whos_move: int, board: Board):
     return result
 
 
+class Heuristics:
+    hamming = score_for_line_hamming
+    count = score_for_line_count
+    count_with_move = score_for_line_count_with_move
+    bin = whos_win
+    free_three = is_free_three
+
+
 def build_heuristic(
-    color: int,
-    scorer_type: Literal["hamming", "count", "count_with_move", "bin"] = "count",
-) -> Callable[[int, Board], float]:
-    global straight_line_indices_0, straight_line_indices_1, diag_indices_0, diag_indices_1
+    color: int | None,
+    scorer_fn: Callable[[int, tuple, int], int],
+    line_len_to_analyze=5,
+) -> Callable[[int | None, Board], float]:
+    scorer_fn = partial(scorer_fn, color)
 
-    if scorer_type == "count":
-        scorer_fn = partial(score_for_line_count, color)
-    elif scorer_type == "count_with_move":
-        scorer_fn = partial(score_for_line_count_with_move, color)
-    elif scorer_type == "hamming":
-        scorer_fn = partial(score_for_line_hamming, color)
-    elif scorer_type == "bin":
-        scorer_fn = whos_win
-    else:
-        raise ValueError(f"unknown scorer_type: {scorer_type}")
-
-    return partial(apply_heuristic, scorer_fn)
+    return partial(
+        apply_scalar_heuristic, scorer_fn, line_len_to_analyze=line_len_to_analyze
+    )

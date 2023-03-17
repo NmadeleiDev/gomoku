@@ -8,7 +8,7 @@ from traig_client.client import MetricTypeEnum as TraigMetricTypeEnum
 from traig_client.client import get_client as traig_client
 
 from board import Board
-from heuristics.sliding import build_heuristic
+from heuristics.sliding import Heuristics, build_heuristic
 from player.base import Player
 
 
@@ -55,7 +55,7 @@ def play_game(player_1: Player, player_2: Player):
     players_hs = {p.color: p.h for p in players}
     players_timers = {p.color: [] for p in players}
 
-    winner_heuristic = build_heuristic(color=0, scorer_type="bin")
+    winner_heuristic = build_heuristic(0, Heuristics.bin)
 
     move_idx = 0
 
@@ -72,17 +72,21 @@ def play_game(player_1: Player, player_2: Player):
             time_start = datetime.now()
             move_x, move_y = current_player.get_move(board)
             players_timers[current_player.color].append(datetime.now() - time_start)
-            board = board.get_board_after_move(move_x, move_y, current_player.color)
+            board_new = board.get_board_after_move(move_x, move_y, current_player.color)
+            if board_new.update_double_free_three_count_and_check_if_violated(
+                current_player.free_three_counter
+            ):
+                print("Move violates double free three rule, try again")
+                continue
         except ValueError as e:
-            print(f"Failed to get move: {e}")
-            print("Try again")
+            print(f"Failed to get move: {e}, try again")
             continue
+
+        board = board_new
 
         print(
             f'\nPlayer "{players_chars[current_player.color]}" is playing [{move_x}, {move_y}] '
-            f"after {players_timers[current_player.color][-1]}"
-        )
-        print(
+            f"after {players_timers[current_player.color][-1]}\n"
             f"Mean time for move for player {players_chars[current_player.color]} "
             f"= {np.mean(players_timers[current_player.color])}"
         )
@@ -103,17 +107,13 @@ def play_game(player_1: Player, player_2: Player):
             k: players_hs[k](current_player.color, board) for k in players_chars.keys()
         }
         print(
-            f'Scores are: {", ".join([players_chars[k] + "=" + str(v) for k, v in scores.items()])}'
+            f'Scores are: {", ".join([players_chars[k] + "=" + str(v) for k, v in scores.items()])}\n'
+            "Captures are:",
+            {players_chars[k]: v * 2 for k, v in board.captures.items()},
+            "\n",
         )
-        print("Captures are:", board.captures)
-        print()
 
-        if (winner := winner_heuristic(current_player.color, board)) != 0:
-            winner_color = winner
-
-        for color, n_captures in board.captures.items():
-            if n_captures > 10:
-                winner_color = color
+        winner_color = board.winner(winner_heuristic)
 
         move_idx += 1
 

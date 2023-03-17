@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from hashlib import md5
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import tabulate
@@ -32,7 +32,9 @@ class Board:
         position: Optional[np.ndarray] = None,
         move_idx=0,
         from_move=None,
+        last_move_color=None,
         captures=None,
+        free_threes_count=None,
     ):
         if position is not None:
             self.position = position
@@ -43,8 +45,12 @@ class Board:
         self.hash = None
         self.move_idx = move_idx
         self.from_move = from_move
+        self.last_move_color = last_move_color
         self.h_val = None
-        self.captures = captures or {}
+        self.captures = captures.copy() if captures is not None else {}
+        self.free_threes_count = (
+            free_threes_count.copy() if free_threes_count is not None else {}
+        )
 
     def is_point_on_board(self, x: int, y: int) -> bool:
         return 0 <= x < self.position.shape[0] and 0 <= y < self.position.shape[1]
@@ -53,6 +59,10 @@ class Board:
         return self.position[x, y] == self.empty_color
 
     def winner(self, criteria) -> int | None:
+        for color, n_captures in self.captures.items():
+            if n_captures >= 5:
+                return color
+
         winner = criteria(None, self)
         if winner != self.empty_color:
             return winner
@@ -70,7 +80,12 @@ class Board:
         result.flags.writeable = True
         result[x, y] = color
         return Board(
-            result, move_idx=self.move_idx + 1, from_move=(x, y), captures=self.captures
+            result,
+            move_idx=self.move_idx + 1,
+            from_move=(x, y),
+            last_move_color=color,
+            captures=self.captures,
+            free_threes_count=self.free_threes_count,
         ).perform_inplace_capture_if_possible()
 
     def perform_inplace_capture_if_possible(self):
@@ -80,10 +95,10 @@ class Board:
             [move_color, -move_color, -move_color, move_color], dtype=int
         )
 
-        self.position.flags.writeable = True
-
         if move_color not in self.captures:
             self.captures[move_color] = 0
+
+        self.position.flags.writeable = True
 
         for idx in np.stack(
             [
@@ -95,12 +110,32 @@ class Board:
             axis=1,
         ):
             idx_t = idx.T
-            if np.all(self.position[idx_t[0], idx_t[1]] == capture_pattern):
-                self.captures[move_color] += 1
-                self.position[idx_t[0][1:-1], idx_t[1][1:-1]] = self.empty_color
+            try:
+                if np.all(self.position[idx_t[0], idx_t[1]] == capture_pattern):
+                    self.captures[move_color] += 1
+                    self.position[idx_t[0][1:-1], idx_t[1][1:-1]] = self.empty_color
+            except IndexError:
+                continue
 
         self.position.flags.writeable = False
         return self
+
+    def update_double_free_three_count_and_check_if_violated(
+        self, free_three_counter: Callable[[int, Board], int]
+    ) -> bool:
+        if self.move_idx < 8:
+            return False
+
+        if self.last_move_color not in self.free_threes_count:
+            self.free_threes_count[self.last_move_color] = 0
+
+        new_count = free_three_counter(self.last_move_color, self)
+
+        is_ok = new_count - self.free_threes_count[self.last_move_color] > 1
+
+        self.free_threes_count[self.last_move_color] = new_count
+
+        return is_ok
 
     def get_point_neighbours_coords_to_all_directions(
         self, x: int, y: int, at_distance=1, filter_by_on_board=True

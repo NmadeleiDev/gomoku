@@ -1,6 +1,4 @@
 import os
-
-# from concurrent.futures import ProcessPoolExecutor as Pool
 from functools import cache, partial
 from multiprocessing import Manager
 from multiprocessing.managers import ValueProxy
@@ -11,10 +9,10 @@ from cachetools import cached
 from traig_client.client import get_client as traig_client
 
 from board import Board
-from heuristics.sliding import build_heuristic
+from heuristics.sliding import Heuristics, build_heuristic
 from player.base import Player
 
-whos_win_h = build_heuristic(None, "bin")
+free_three_counter = build_heuristic(None, Heuristics.free_three, line_len_to_analyze=6)
 
 
 def yield_completed(async_results: list[AsyncResult], positions: list):
@@ -48,14 +46,22 @@ def get_next_positions(board: Board, color: int, h=None) -> list[Board]:
         ]
     )
     if h is None:
-        return [
+        result = [
             board.get_board_after_move(m[0], m[1], color) for m in possible_moves_set
         ]
     else:
-        return [
+        result = [
             board.get_board_after_move(m[0], m[1], color).compute_h_for_self(h)
             for m in possible_moves_set
         ]
+
+    return [
+        x
+        for x in result
+        if not x.update_double_free_three_count_and_check_if_violated(
+            free_three_counter
+        )
+    ]
 
 
 @cached(
@@ -187,9 +193,7 @@ class AIPlayer(Player):
     def __init__(self, color):
         super().__init__(color)
 
-        self.calculation_depth = 4
-
-        # self.h_for_filter = build_heuristic(self.color, scorer_type="count_with_move")
+        self.calculation_depth = 3
 
         self.max_workers = os.cpu_count()
 

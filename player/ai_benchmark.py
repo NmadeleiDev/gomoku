@@ -33,7 +33,7 @@ def get_next_positions(board: Board, color: int, h=None) -> list[Board]:
 
     for stone_coords in np.argwhere(board.position != board.empty_color):
         for neighbour_coords in board.get_point_neighbours_coords_to_all_directions(
-            *stone_coords, at_distance=1
+            *stone_coords
         ):
             if board.is_point_empty(*neighbour_coords):
                 possible_moves_set.add(tuple(neighbour_coords))
@@ -103,9 +103,6 @@ def minimax(
         key=lambda p: p.h_val,
         reverse=is_maximizer,
     )
-
-    if next_positions[0] == win_value:
-        next_positions = [next_positions[0]]
 
     this_layer_best_score = -win_value
     this_layer_best_next_move = None
@@ -192,7 +189,7 @@ def minimax(
     return this_layer_best_score, this_layer_best_next_move
 
 
-class AIPlayer(Player):
+class BenchmarkPlayer(Player):
     def __init__(self, color):
         super().__init__(color)
 

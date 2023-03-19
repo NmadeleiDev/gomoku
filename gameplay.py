@@ -62,7 +62,8 @@ def play_game(player_1: Player, player_2: Player):
     while winner_color is None:
         current_player = players[current_player_idx]
         print(
-            f'\n#{move_idx} :: Move by player "{players_chars[current_player.color]}". Current board is:'
+            f'\n#{move_idx} :: Move by player "{players_chars[current_player.color]}" ({current_player_idx + 1}). '
+            f'Current board is:'
         )
         board.print_board(players_chars)
         print()

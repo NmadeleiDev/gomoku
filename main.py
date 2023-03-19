@@ -4,6 +4,7 @@ from typing import Literal
 
 from gameplay import start_game
 from player.ai import AIPlayer
+from player.ai_benchmark import BenchmarkPlayer
 from player.base import Player
 from player.human import HumanPlayer
 
@@ -16,12 +17,13 @@ def init_logging():
     )
 
 
-def create_players(p_types: list[Literal["human", "AI"]]) -> tuple[Player, Player]:
+def create_players(p_types: list[Literal["human", "AI", "bm"]]) -> tuple[Player, Player]:
     player_colors = [1, -1]
 
     p_types_dict = {
         "human": HumanPlayer,
         "AI": AIPlayer,
+        "bm": BenchmarkPlayer
     }
 
     return tuple([p_types_dict[p_type](player_colors.pop()) for p_type in p_types])

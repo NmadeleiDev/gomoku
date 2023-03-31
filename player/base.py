@@ -16,6 +16,11 @@ class Player(ABC):
             self.color, Heuristics.free_three, line_len_to_analyze=6
         )
 
+        self.move_getter = None
+
+    def set_move_getter(self, move_getter):
+        self.move_getter = move_getter
+
     def get_move(self, position: Board) -> tuple[int, int]:
         raise NotImplementedError()
 

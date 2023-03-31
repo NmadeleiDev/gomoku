@@ -25,7 +25,7 @@ center_square_points = None
 
 class Board:
     empty_color = 0
-    size = 20
+    size = 19
 
     def __init__(
         self,

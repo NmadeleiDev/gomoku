@@ -1,0 +1,299 @@
+import logging
+import tkinter
+import tkinter as tk
+from datetime import datetime, timedelta
+from queue import Queue
+from tkinter import Tk
+
+import joblib
+import numpy as np
+from PIL import Image, ImageEnhance, ImageTk
+from traig_client.client import MetricTypeEnum as TraigMetricTypeEnum
+from traig_client.client import get_client as traig_client
+
+from board import Board
+from gameplay.base import BaseGameplay
+from gameplay.utils import clear_previous_game_logs
+from heuristics.sliding import Heuristics, build_heuristic
+from player.human import HumanPlayer
+
+SIZE = 650
+WINDOW_XY = np.array([SIZE, SIZE])
+
+BOARD_ZOOM_FACTOR = 0.85
+BOARD_ZOOM = np.array(WINDOW_XY * BOARD_ZOOM_FACTOR, dtype=int)
+ARMY_SIZE = np.array(BOARD_ZOOM * 0.04, dtype=int)
+
+
+def init_traig_client():
+    traig_client().init_metrics(
+        player_X_mean_move_time=TraigMetricTypeEnum.mean.value,
+        player_O_mean_move_time=TraigMetricTypeEnum.mean.value,
+        mean_move_time=TraigMetricTypeEnum.mean.value,
+        n_moves=TraigMetricTypeEnum.count.value,
+        who_won=TraigMetricTypeEnum.value.value,
+        **{
+            "color_-1_calc_depth": TraigMetricTypeEnum.value.value,
+            "color_1_calc_depth": TraigMetricTypeEnum.value.value,
+        },
+    )
+
+    logging.debug(f"traig client is {traig_client()}")
+
+
+class VisualGameplay(BaseGameplay):
+    def __init__(self, player_1, player_2):
+        super().__init__(player_1, player_2)
+        self.root = Tk()
+        self.moves_queue = Queue(-1)
+
+        self.img_stone_black_opaque = None
+        self.img_stone_black = None
+        self.img_stone_white_opaque = None
+        self.img_stone_white = None
+        self.img_board = None
+        self.img_error = None
+
+        self.root.geometry(f"{WINDOW_XY[0]}x{WINDOW_XY[1] + 100}")
+        self.root.title("Gomoku")
+
+        self.frame = tk.Frame(self.root, width=WINDOW_XY[0], height=100)
+        self.move_idx_label = tk.Label(
+            self.frame, text="Move #0", font=("Helvetica", 18, "bold")
+        )
+        self.move_idx_label.pack(side="top")
+
+        self.players_frame = tk.Frame(self.frame, width=WINDOW_XY[0], height=100)
+        self.players_frame.pack(side="bottom")
+
+        self.player_1_frame = tk.Frame(
+            self.players_frame,
+            width=WINDOW_XY[0] // 2,
+            height=100,
+            highlightthickness=4,
+            highlightbackground="green",
+            padx=20,
+            pady=10,
+        )
+        self.player_2_frame = tk.Frame(
+            self.players_frame,
+            width=WINDOW_XY[0] // 2,
+            height=100,
+            highlightthickness=4,
+            highlightbackground="gray",
+            padx=20,
+            pady=10,
+        )
+        self.player_1_frame.pack(side="left")
+        self.player_2_frame.pack(side="right")
+        self.frame.pack()
+
+        tk.Label(
+            self.player_1_frame, text="Player 1", font=("Helvetica", 18, "bold")
+        ).pack(side="top")
+        tk.Label(
+            self.player_2_frame, text="Player 2", font=("Helvetica", 18, "bold")
+        ).pack(side="top")
+        self.captures_player_1_label = tk.Label(self.player_1_frame, text="Captures: 0")
+        self.captures_player_1_label.pack(side="top")
+        self.captures_player_2_label = tk.Label(self.player_2_frame, text="Captures: 0")
+        self.captures_player_2_label.pack(side="top")
+
+        self.mean_time_player_1_label = tk.Label(
+            self.player_1_frame, text="Mean time: 0"
+        )
+        self.mean_time_player_1_label.pack(side="bottom")
+        self.mean_time_player_2_label = tk.Label(
+            self.player_2_frame, text="Mean time: 0"
+        )
+        self.mean_time_player_2_label.pack(side="bottom")
+
+        self.total_time_player_1_label = tk.Label(
+            self.player_1_frame, text="Total time: 0"
+        )
+        self.total_time_player_1_label.pack(side="bottom")
+        self.total_time_player_2_label = tk.Label(
+            self.player_2_frame, text="Total time: 0"
+        )
+        self.total_time_player_2_label.pack(side="bottom")
+
+        self.canvas = tk.Canvas(self.root, width=WINDOW_XY[0], height=WINDOW_XY[1])
+        self.canvas.configure(background="#8baabf")
+        self.canvas.pack()
+
+        self.canvas.bind("<Button-1>", self.move_callback)
+
+        self.fields = [[None for _ in range(Board.size)] for _ in range(Board.size)]
+
+        self.load_tk_images()
+        self.player_stone_img_dict = {
+            self.player_1.color: [self.img_stone_white, self.img_stone_white_opaque],
+            self.player_2.color: [self.img_stone_black, self.img_stone_black_opaque],
+        }
+
+        self.canvas.create_image(
+            WINDOW_XY[0] // 2, WINDOW_XY[1] // 2, anchor="center", image=self.img_board
+        )
+
+        self.offset = (SIZE - SIZE * BOARD_ZOOM_FACTOR) * 1.4 / 2
+        playing_board_part_size = SIZE * BOARD_ZOOM_FACTOR * 0.984
+        self.step = playing_board_part_size / Board.size
+
+        self.player_timers = {p.color: 0 for p in [self.player_1, self.player_2]}
+
+        self.field_size = self.step / 2
+        self.game_start_time = None
+
+    def start(self):
+        self.root.after(100, self.call_game_iteration, False)
+        self.game_start_time = datetime.now()
+        self.root.mainloop()
+
+    def call_game_iteration(self, do_wait_for_next_move):
+        if do_wait_for_next_move and self.moves_queue.empty():
+            self.root.after(100, self.call_game_iteration, do_wait_for_next_move)
+        else:
+            do_wait_for_next_move = next(self.game_iterator_instance)
+            if not isinstance(do_wait_for_next_move, bool):
+                winner_color = "black" if do_wait_for_next_move else "white"
+                tk.Label(
+                    self.root,
+                    text=f"{winner_color} won!",
+                    font=("Helvetica", 24, "bold"),
+                    padx=10,
+                    pady=10,
+                ).place(anchor=tkinter.CENTER, relx=0.5, rely=0.5)
+                return
+            self.root.after(10, self.call_game_iteration, do_wait_for_next_move)
+
+    def move_callback(self, event):
+        i = int((event.x - self.offset + self.field_size) // self.step)
+        j = int((event.y - self.offset + self.field_size) // self.step)
+
+        self.moves_queue.put((i, j))
+
+    def place_stone(self, i: int, j: int, color: int):
+        if i >= len(self.fields) or j >= len(self.fields[i]):
+            print("Wrong move")
+            return
+
+        stone_img_ref = self.canvas.create_image(
+            self.offset + i * self.step,
+            self.offset + j * self.step,
+            image=self.player_stone_img_dict[color][0],
+        )
+
+        self.fields[i][j] = stone_img_ref
+
+    def game_iterator(self):
+        clear_previous_game_logs()
+
+        players = [self.player_1, self.player_2]
+
+        board = Board()
+
+        winner_color = None
+
+        current_player_idx = 0
+        players_timers = {p.color: [] for p in players}
+        player_timer_labels = {
+            self.player_1.color: [
+                self.total_time_player_1_label,
+                self.mean_time_player_1_label,
+            ],
+            self.player_2.color: [
+                self.total_time_player_2_label,
+                self.mean_time_player_2_label,
+            ],
+        }
+
+        winner_heuristic = build_heuristic(0, Heuristics.bin)
+
+        move_idx = 0
+
+        if isinstance(players[0], HumanPlayer):
+            yield True
+
+        while winner_color is None:
+            current_player = players[current_player_idx]
+            other_player = players[(current_player_idx + 1) % 2]
+            self.move_idx_label.configure(text=f"Move #{move_idx}")
+            joblib.dump(board, f"./logs/board_at_move_{move_idx}.joblib")
+
+            try:
+                if isinstance(current_player, HumanPlayer):
+                    total_time_passed = datetime.now() - self.game_start_time
+                    time_sum = (
+                        total_time_passed
+                        - sum(players_timers[other_player.color], timedelta())
+                    ).total_seconds()
+                    prev_time_sum = sum(
+                        players_timers[current_player.color], timedelta()
+                    ).total_seconds()
+                    last_move_time = time_sum - prev_time_sum
+                    move_x, move_y = current_player.get_move(board)
+                    players_timers[current_player.color].append(
+                        timedelta(seconds=last_move_time)
+                    )
+                    player_timer_labels[current_player.color][0].configure(
+                        text=f"Total time: {time_sum:.2f}"
+                    )
+                    player_timer_labels[current_player.color][1].configure(
+                        text=f"Mean time: {(time_sum / len(players_timers[current_player.color])):.2f}"
+                    )
+                else:
+                    time_start = datetime.now()
+                    move_x, move_y = current_player.get_move(board)
+                    players_timers[current_player.color].append(
+                        datetime.now() - time_start
+                    )
+                    time_sum = sum(
+                        players_timers[current_player.color], timedelta()
+                    ).total_seconds()
+                    player_timer_labels[current_player.color][0].configure(
+                        text=f"Total time: {time_sum:.2f}"
+                    )
+                    player_timer_labels[current_player.color][1].configure(
+                        text=f"Mean time: {(time_sum / len(players_timers[current_player.color])):.2f}"
+                    )
+                board_new = board.get_board_after_move(
+                    move_x, move_y, current_player.color
+                )
+                if board_new.update_double_free_three_count_and_check_if_violated(
+                    current_player.free_three_counter
+                ):
+                    print("Move violates double free three rule, try again")
+                    continue
+                self.place_stone(move_x, move_y, current_player.color)
+            except ValueError as e:
+                print(f"Failed to get move: {e}, try again")
+                continue
+
+            board = board_new
+
+            winner_color = board.winner(winner_heuristic)
+
+            move_idx += 1
+
+            current_player_idx = (current_player_idx + 1) % 2
+            if not winner_color:
+                yield isinstance(players[current_player_idx], HumanPlayer)
+
+        yield winner_color
+
+    def load_tk_images(self):
+        error = Image.open("./img/error.png").resize(ARMY_SIZE, Image.ANTIALIAS)
+        self.img_error = ImageTk.PhotoImage(error)
+        board = Image.open("./img/board.png").resize(BOARD_ZOOM, Image.ANTIALIAS)
+        self.img_board = ImageTk.PhotoImage(board)
+        horde = Image.open("./img/white.png").resize(ARMY_SIZE, Image.ANTIALIAS)
+        self.img_stone_white = ImageTk.PhotoImage(horde)
+        horde.putalpha(ImageEnhance.Brightness(horde.split()[3]).enhance(0.5))
+        self.img_stone_white_opaque = ImageTk.PhotoImage(horde)
+        alliance = Image.open("./img/black.png").resize(ARMY_SIZE, Image.ANTIALIAS)
+        self.img_stone_black = ImageTk.PhotoImage(alliance)
+        alliance.putalpha(ImageEnhance.Brightness(alliance.split()[3]).enhance(0.5))
+        self.img_stone_black_opaque = ImageTk.PhotoImage(alliance)
+
+    def get_move(self, *args) -> tuple[int, int]:
+        return self.moves_queue.get()

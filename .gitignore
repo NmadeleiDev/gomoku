@@ -1,4 +1,4 @@
 experiments.ipynb
 experiments.py
-#logs/
 __pycache__/
+logs/

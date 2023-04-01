@@ -23,6 +23,10 @@ WINDOW_XY = np.array([SIZE, SIZE])
 BOARD_ZOOM_FACTOR = 0.85
 BOARD_ZOOM = np.array(WINDOW_XY * BOARD_ZOOM_FACTOR, dtype=int)
 ARMY_SIZE = np.array(BOARD_ZOOM * 0.04, dtype=int)
+OFFSET = (SIZE - SIZE * BOARD_ZOOM_FACTOR) * 1.4 / 2
+PLAYING_BOARD_PART_SIZE = SIZE * BOARD_ZOOM_FACTOR * 0.984
+STEP_SIZE = PLAYING_BOARD_PART_SIZE / Board.size
+FIELD_SIZE = STEP_SIZE / 2
 
 
 def init_traig_client():
@@ -44,8 +48,27 @@ def init_traig_client():
 class VisualGameplay(BaseGameplay):
     def __init__(self, player_1, player_2):
         super().__init__(player_1, player_2)
+        self.player_timers = None
+        self.player_stone_img_dict = None
+        self.fields = None
+        self.canvas = None
+        self.total_time_player_2_label = None
+        self.total_time_player_1_label = None
+        self.mean_time_player_2_label = None
+        self.mean_time_player_1_label = None
+        self.captures_player_2_label = None
+        self.captures_player_1_label = None
+        self.player_2_frame = None
+        self.player_1_frame = None
+        self.players_frame = None
+        self.move_idx_label = None
+        self.frame = None
+
         self.root = Tk()
-        self.moves_queue = Queue(-1)
+        self.root.title("Gomoku")
+        self.root.geometry(f"{WINDOW_XY[0]}x{WINDOW_XY[1] + 100}")
+
+        self.moves_queue = None
 
         self.img_stone_black_opaque = None
         self.img_stone_black = None
@@ -54,14 +77,26 @@ class VisualGameplay(BaseGameplay):
         self.img_board = None
         self.img_error = None
 
-        self.root.geometry(f"{WINDOW_XY[0]}x{WINDOW_XY[1] + 100}")
-        self.root.title("Gomoku")
+        self.after_cb_id = None
 
+        self.game_start_time = None
+
+        self.init_variables()
+        self.draw_initial_state()
+
+    def draw_initial_state(self):
         self.frame = tk.Frame(self.root, width=WINDOW_XY[0], height=100)
         self.move_idx_label = tk.Label(
             self.frame, text="Move #0", font=("Helvetica", 18, "bold")
         )
         self.move_idx_label.pack(side="top")
+        controls_frame = tk.Frame(self.frame, width=WINDOW_XY[0] // 2, height=100)
+        controls_frame.pack(side="left")
+        tk.Button(controls_frame, text="AI help", command=self.ai_help).pack(side="top")
+        tk.Button(controls_frame, text="Reset", command=self.reset_game).pack(
+            side="top"
+        )
+        tk.Button(controls_frame, text="Exit", command=self.exit).pack(side="top")
 
         self.players_frame = tk.Frame(self.frame, width=WINDOW_XY[0], height=100)
         self.players_frame.pack(side="bottom")
@@ -89,10 +124,14 @@ class VisualGameplay(BaseGameplay):
         self.frame.pack()
 
         tk.Label(
-            self.player_1_frame, text="Player 1", font=("Helvetica", 18, "bold")
+            self.player_1_frame,
+            text=f"White ({type(self.player_1).__name__.replace('Player', '')})",
+            font=("Helvetica", 18, "bold"),
         ).pack(side="top")
         tk.Label(
-            self.player_2_frame, text="Player 2", font=("Helvetica", 18, "bold")
+            self.player_2_frame,
+            text=f"Black ({type(self.player_2).__name__.replace('Player', '')})",
+            font=("Helvetica", 18, "bold"),
         ).pack(side="top")
         self.captures_player_1_label = tk.Label(self.player_1_frame, text="Captures: 0")
         self.captures_player_1_label.pack(side="top")
@@ -123,8 +162,6 @@ class VisualGameplay(BaseGameplay):
 
         self.canvas.bind("<Button-1>", self.move_callback)
 
-        self.fields = [[None for _ in range(Board.size)] for _ in range(Board.size)]
-
         self.load_tk_images()
         self.player_stone_img_dict = {
             self.player_1.color: [self.img_stone_white, self.img_stone_white_opaque],
@@ -135,23 +172,40 @@ class VisualGameplay(BaseGameplay):
             WINDOW_XY[0] // 2, WINDOW_XY[1] // 2, anchor="center", image=self.img_board
         )
 
-        self.offset = (SIZE - SIZE * BOARD_ZOOM_FACTOR) * 1.4 / 2
-        playing_board_part_size = SIZE * BOARD_ZOOM_FACTOR * 0.984
-        self.step = playing_board_part_size / Board.size
-
+    def init_variables(self):
         self.player_timers = {p.color: 0 for p in [self.player_1, self.player_2]}
-
-        self.field_size = self.step / 2
-        self.game_start_time = None
+        self.fields = [[None for _ in range(Board.size)] for _ in range(Board.size)]
+        self.moves_queue = Queue(1)
 
     def start(self):
-        self.root.after(100, self.call_game_iteration, False)
+        self.after_cb_id = self.root.after(100, self.call_game_iteration, False)
         self.game_start_time = datetime.now()
         self.root.mainloop()
 
+    def close_window(self):
+        self.root.destroy()
+
+    def ai_help(self):
+        self.player_2.do_ai_help = True
+
+    def reset_game(self):
+        self.root.after_cancel(self.after_cb_id)
+        self.frame.destroy()
+        self.canvas.destroy()
+        self.init_variables()
+        self.game_iterator_instance = self.game_iterator()
+        self.draw_initial_state()
+        self.after_cb_id = self.root.after(100, self.call_game_iteration, False)
+
+    def exit(self):
+        self.root.destroy()
+        self.root.quit()
+
     def call_game_iteration(self, do_wait_for_next_move):
         if do_wait_for_next_move and self.moves_queue.empty():
-            self.root.after(100, self.call_game_iteration, do_wait_for_next_move)
+            self.after_cb_id = self.root.after(
+                100, self.call_game_iteration, do_wait_for_next_move
+            )
         else:
             do_wait_for_next_move = next(self.game_iterator_instance)
             if not isinstance(do_wait_for_next_move, bool):
@@ -164,11 +218,20 @@ class VisualGameplay(BaseGameplay):
                     pady=10,
                 ).place(anchor=tkinter.CENTER, relx=0.5, rely=0.5)
                 return
-            self.root.after(10, self.call_game_iteration, do_wait_for_next_move)
+            self.after_cb_id = self.root.after(
+                10, self.call_game_iteration, do_wait_for_next_move
+            )
 
     def move_callback(self, event):
-        i = int((event.x - self.offset + self.field_size) // self.step)
-        j = int((event.y - self.offset + self.field_size) // self.step)
+        if not self.moves_queue.empty():
+            print("Queue not empty")
+            return
+        i = int((event.x - OFFSET + FIELD_SIZE) // STEP_SIZE)
+        j = int((event.y - OFFSET + FIELD_SIZE) // STEP_SIZE)
+
+        if i < 0 or j < 0 or i >= len(self.fields) or j >= len(self.fields[i]):
+            print("Wrong move")
+            return
 
         self.moves_queue.put((i, j))
 
@@ -178,12 +241,20 @@ class VisualGameplay(BaseGameplay):
             return
 
         stone_img_ref = self.canvas.create_image(
-            self.offset + i * self.step,
-            self.offset + j * self.step,
+            OFFSET + i * STEP_SIZE,
+            OFFSET + j * STEP_SIZE,
             image=self.player_stone_img_dict[color][0],
         )
 
         self.fields[i][j] = stone_img_ref
+
+    def draw_stones(self, board: Board):
+        for i in range(board.size):
+            for j in range(board.size):
+                if self.fields[i][j] is not None:
+                    self.canvas.delete(self.fields[i][j])
+                if board.position[i][j] != Board.empty_color:
+                    self.place_stone(i, j, board.position[i][j])
 
     def game_iterator(self):
         clear_previous_game_logs()
@@ -263,13 +334,27 @@ class VisualGameplay(BaseGameplay):
                     current_player.free_three_counter
                 ):
                     print("Move violates double free three rule, try again")
+                    yield isinstance(players[current_player_idx], HumanPlayer)
                     continue
-                self.place_stone(move_x, move_y, current_player.color)
+                # self.place_stone(move_x, move_y, current_player.color)
             except ValueError as e:
                 print(f"Failed to get move: {e}, try again")
+                yield isinstance(players[current_player_idx], HumanPlayer)
                 continue
 
             board = board_new
+
+            for color, n_captures in board.captures.items():
+                if color == self.player_1.color:
+                    self.captures_player_1_label.configure(
+                        text=f"Captures: {n_captures * 2}"
+                    )
+                elif color == self.player_2.color:
+                    self.captures_player_2_label.configure(
+                        text=f"Captures: {n_captures * 2}"
+                    )
+
+            self.draw_stones(board)
 
             winner_color = board.winner(winner_heuristic)
 

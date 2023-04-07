@@ -14,7 +14,6 @@ from traig_client.client import get_client as traig_client
 from board import Board
 from gameplay.base import BaseGameplay
 from gameplay.utils import clear_previous_game_logs
-from heuristics.sliding import Heuristics, build_heuristic
 from player.human import HumanPlayer
 
 SIZE = 650
@@ -76,12 +75,12 @@ class VisualGameplay(BaseGameplay):
         self.img_stone_white = None
         self.img_board = None
         self.img_error = None
+        self.player_timer_labels = None
 
         self.after_cb_id = None
 
         self.game_start_time = None
 
-        self.init_variables()
         self.draw_initial_state()
 
     def draw_initial_state(self):
@@ -125,12 +124,12 @@ class VisualGameplay(BaseGameplay):
 
         tk.Label(
             self.player_1_frame,
-            text=f"White ({type(self.player_1).__name__.replace('Player', '')})",
+            text=f"{self.player_color_str(self.player_1.color)} ({type(self.player_1).__name__.replace('Player', '')})",
             font=("Helvetica", 18, "bold"),
         ).pack(side="top")
         tk.Label(
             self.player_2_frame,
-            text=f"Black ({type(self.player_2).__name__.replace('Player', '')})",
+            text=f"{self.player_color_str(self.player_2.color)} ({type(self.player_2).__name__.replace('Player', '')})",
             font=("Helvetica", 18, "bold"),
         ).pack(side="top")
         self.captures_player_1_label = tk.Label(self.player_1_frame, text="Captures: 0")
@@ -172,13 +171,28 @@ class VisualGameplay(BaseGameplay):
             WINDOW_XY[0] // 2, WINDOW_XY[1] // 2, anchor="center", image=self.img_board
         )
 
-    def init_variables(self):
+        self.player_timer_labels = {
+            self.player_1.color: [
+                self.total_time_player_1_label,
+                self.mean_time_player_1_label,
+            ],
+            self.player_2.color: [
+                self.total_time_player_2_label,
+                self.mean_time_player_2_label,
+            ],
+        }
+
+    def player_color_str(self, color):
+        return "White" if color == self.player_1.color else "Black"
+
+    def pre_game_init(self):
+        super().pre_game_init()
         self.player_timers = {p.color: 0 for p in [self.player_1, self.player_2]}
         self.fields = [[None for _ in range(Board.size)] for _ in range(Board.size)]
         self.moves_queue = Queue(1)
 
     def start(self):
-        self.after_cb_id = self.root.after(100, self.call_game_iteration, False)
+        self.after_cb_id = self.root.after(100, self.call_game_iteration)
         self.game_start_time = datetime.now()
         self.root.mainloop()
 
@@ -186,41 +200,40 @@ class VisualGameplay(BaseGameplay):
         self.root.destroy()
 
     def ai_help(self):
-        self.player_2.do_ai_help = True
+        self.moves_queue.put(self.get_move_from_ai())
 
     def reset_game(self):
         self.root.after_cancel(self.after_cb_id)
         self.frame.destroy()
         self.canvas.destroy()
-        self.init_variables()
+        self.pre_game_init()
         self.game_iterator_instance = self.game_iterator()
         self.draw_initial_state()
-        self.after_cb_id = self.root.after(100, self.call_game_iteration, False)
+        self.after_cb_id = self.root.after(100, self.call_game_iteration)
 
     def exit(self):
         self.root.destroy()
         self.root.quit()
 
-    def call_game_iteration(self, do_wait_for_next_move):
-        if do_wait_for_next_move and self.moves_queue.empty():
-            self.after_cb_id = self.root.after(
-                100, self.call_game_iteration, do_wait_for_next_move
-            )
+    def call_game_iteration(self):
+        self.move_idx_label.configure(
+            text=f"Move #{self.move_idx // 2} / {self.player_color_str(self.active_player.color)}"
+        )
+        if isinstance(self.active_player, HumanPlayer) and self.moves_queue.empty():
+            self.after_cb_id = self.root.after(100, self.call_game_iteration)
         else:
-            do_wait_for_next_move = next(self.game_iterator_instance)
-            if not isinstance(do_wait_for_next_move, bool):
-                winner_color = "black" if do_wait_for_next_move else "white"
+            winner_color = next(self.game_iterator_instance)
+            if winner_color is not None:
+                winner_color_name = self.player_color_str(winner_color)
                 tk.Label(
                     self.root,
-                    text=f"{winner_color} won!",
+                    text=f"{winner_color_name} won!",
                     font=("Helvetica", 24, "bold"),
                     padx=10,
                     pady=10,
                 ).place(anchor=tkinter.CENTER, relx=0.5, rely=0.5)
                 return
-            self.after_cb_id = self.root.after(
-                10, self.call_game_iteration, do_wait_for_next_move
-            )
+            self.after_cb_id = self.root.after(10, self.call_game_iteration)
 
     def move_callback(self, event):
         if not self.moves_queue.empty():
@@ -248,6 +261,22 @@ class VisualGameplay(BaseGameplay):
 
         self.fields[i][j] = stone_img_ref
 
+    def place_error_img(self, i: int, j: int):
+        if i >= len(self.fields) or j >= len(self.fields[i]):
+            print("Wrong move")
+            return
+
+        err_img_ref = self.canvas.create_image(
+            OFFSET + i * STEP_SIZE,
+            OFFSET + j * STEP_SIZE,
+            image=self.img_error,
+        )
+
+        self.root.after(3000, self.remove_img_from_canvas, err_img_ref)
+
+    def remove_img_from_canvas(self, ref: int):
+        self.canvas.delete(ref)
+
     def draw_stones(self, board: Board):
         for i in range(board.size):
             for j in range(board.size):
@@ -259,92 +288,67 @@ class VisualGameplay(BaseGameplay):
     def game_iterator(self):
         clear_previous_game_logs()
 
-        players = [self.player_1, self.player_2]
-
-        board = Board()
-
         winner_color = None
 
-        current_player_idx = 0
-        players_timers = {p.color: [] for p in players}
-        player_timer_labels = {
-            self.player_1.color: [
-                self.total_time_player_1_label,
-                self.mean_time_player_1_label,
-            ],
-            self.player_2.color: [
-                self.total_time_player_2_label,
-                self.mean_time_player_2_label,
-            ],
-        }
-
-        winner_heuristic = build_heuristic(0, Heuristics.bin)
-
-        move_idx = 0
-
-        if isinstance(players[0], HumanPlayer):
-            yield True
+        players_timers = {p.color: [] for p in self.players}
 
         while winner_color is None:
-            current_player = players[current_player_idx]
-            other_player = players[(current_player_idx + 1) % 2]
-            self.move_idx_label.configure(text=f"Move #{move_idx}")
-            joblib.dump(board, f"./logs/board_at_move_{move_idx}.joblib")
+            joblib.dump(self.board, f"./logs/board_at_move_{self.move_idx}.joblib")
 
             try:
-                if isinstance(current_player, HumanPlayer):
+                if isinstance(self.active_player, HumanPlayer):
                     total_time_passed = datetime.now() - self.game_start_time
                     time_sum = (
                         total_time_passed
-                        - sum(players_timers[other_player.color], timedelta())
+                        - sum(players_timers[self.passive_player.color], timedelta())
                     ).total_seconds()
                     prev_time_sum = sum(
-                        players_timers[current_player.color], timedelta()
+                        players_timers[self.active_player.color], timedelta()
                     ).total_seconds()
                     last_move_time = time_sum - prev_time_sum
-                    move_x, move_y = current_player.get_move(board)
-                    players_timers[current_player.color].append(
+                    move_x, move_y = self.active_player.get_move(self.board)
+                    players_timers[self.active_player.color].append(
                         timedelta(seconds=last_move_time)
                     )
-                    player_timer_labels[current_player.color][0].configure(
+                    self.player_timer_labels[self.active_player.color][0].configure(
                         text=f"Total time: {time_sum:.2f}"
                     )
-                    player_timer_labels[current_player.color][1].configure(
-                        text=f"Mean time: {(time_sum / len(players_timers[current_player.color])):.2f}"
+                    self.player_timer_labels[self.active_player.color][1].configure(
+                        text=f"Mean time: {(time_sum / len(players_timers[self.active_player.color])):.2f}"
                     )
                 else:
                     time_start = datetime.now()
-                    move_x, move_y = current_player.get_move(board)
-                    players_timers[current_player.color].append(
+                    move_x, move_y = self.active_player.get_move(self.board)
+                    players_timers[self.active_player.color].append(
                         datetime.now() - time_start
                     )
                     time_sum = sum(
-                        players_timers[current_player.color], timedelta()
+                        players_timers[self.active_player.color], timedelta()
                     ).total_seconds()
-                    player_timer_labels[current_player.color][0].configure(
+                    self.player_timer_labels[self.active_player.color][0].configure(
                         text=f"Total time: {time_sum:.2f}"
                     )
-                    player_timer_labels[current_player.color][1].configure(
-                        text=f"Mean time: {(time_sum / len(players_timers[current_player.color])):.2f}"
+                    self.player_timer_labels[self.active_player.color][1].configure(
+                        text=f"Mean time: {(time_sum / len(players_timers[self.active_player.color])):.2f}"
                     )
-                board_new = board.get_board_after_move(
-                    move_x, move_y, current_player.color
+                board_new = self.board.get_board_after_move(
+                    move_x, move_y, self.active_player.color
                 )
                 if board_new.update_double_free_three_count_and_check_if_violated(
-                    current_player.free_three_counter
+                    self.active_player.free_three_counter
                 ):
                     print("Move violates double free three rule, try again")
-                    yield isinstance(players[current_player_idx], HumanPlayer)
+                    self.place_error_img(move_x, move_y)
+                    yield None
                     continue
-                # self.place_stone(move_x, move_y, current_player.color)
             except ValueError as e:
                 print(f"Failed to get move: {e}, try again")
-                yield isinstance(players[current_player_idx], HumanPlayer)
+                yield None
                 continue
 
-            board = board_new
+            self.board = board_new
 
-            for color, n_captures in board.captures.items():
+            for color, n_captures in self.board.captures.items():
                 if color == self.player_1.color:
                     self.captures_player_1_label.configure(
                         text=f"Captures: {n_captures * 2}"
@@ -354,15 +358,13 @@ class VisualGameplay(BaseGameplay):
                         text=f"Captures: {n_captures * 2}"
                     )
 
-            self.draw_stones(board)
+            self.draw_stones(self.board)
 
-            winner_color = board.winner(winner_heuristic)
+            winner_color = self.board.winner(self.winner_heuristic)
 
-            move_idx += 1
-
-            current_player_idx = (current_player_idx + 1) % 2
+            self.increment_move_index()
             if not winner_color:
-                yield isinstance(players[current_player_idx], HumanPlayer)
+                yield None
 
         yield winner_color
 

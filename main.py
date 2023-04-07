@@ -48,24 +48,15 @@ def start_game(
     player_2: Player,
     gameplay_class: type[VisualGameplay] | type[TerminalGameplay],
 ):
-    player_1.start_game()
-    player_2.start_game()
-
     vis = gameplay_class(player_1, player_2)
+    vis.pre_game_init()
 
     try:
         vis.start()
     except KeyboardInterrupt:
         print("KeyboardInterrupt detected, clearing resources and exiting...")
-        player_1.end_game()
-        player_2.end_game()
-    except Exception as e:
-        logging.exception(e)
-        player_1.end_game()
-        player_2.end_game()
 
-    player_1.end_game()
-    player_2.end_game()
+    vis.end_game()
 
 
 def main():

@@ -25,13 +25,13 @@ class TerminalGameplay(BaseGameplay):
 
         for inp in (x, y):
             if inp >= Board.size or inp < 0:
-                raise ValueError("Coordinates must be in [0:19]")
+                raise ValueError(f"Coordinates must be in [0:{Board.size - 1}]")
         return x, y
 
     def start(self):
-        self.call_game_iteration(True)
+        self.call_game_iteration()
 
-    def call_game_iteration(self, do_wait_for_next_move):
+    def call_game_iteration(self):
         for result in self.game_iterator_instance:
             if result is None:
                 continue
@@ -40,38 +40,32 @@ class TerminalGameplay(BaseGameplay):
     def game_iterator(self):
         clear_previous_game_logs()
 
-        players = [self.player_1, self.player_2]
-
-        board = Board()
-
         winner_color = None
 
-        current_player_idx = 0
         players_chars = {
             self.player_1.color: "X",
             self.player_2.color: "O",
         }
-        players_hs = {p.color: p.h for p in players}
-        players_timers = {p.color: [] for p in players}
+        players_hs = {p.color: p.h for p in self.players}
+        players_timers = {p.color: [] for p in self.players}
 
         winner_heuristic = build_heuristic(0, Heuristics.bin)
 
-        move_idx = 0
-
         while winner_color is None:
-            current_player = players[current_player_idx]
-            self.print_info_before_move(board, current_player, players_chars)
-            joblib.dump(board, f"./logs/board_at_move_{move_idx}.joblib")
+            self.print_info_before_move(self.board, players_chars)
+            joblib.dump(self.board, f"./logs/board_at_move_{self.move_idx}.joblib")
 
             try:
                 time_start = datetime.now()
-                move_x, move_y = current_player.get_move(board)
-                players_timers[current_player.color].append(datetime.now() - time_start)
-                board_new = board.get_board_after_move(
-                    move_x, move_y, current_player.color
+                move_x, move_y = self.active_player.get_move(self.board)
+                players_timers[self.active_player.color].append(
+                    datetime.now() - time_start
+                )
+                board_new = self.board.get_board_after_move(
+                    move_x, move_y, self.active_player.color
                 )
                 if board_new.update_double_free_three_count_and_check_if_violated(
-                    current_player.free_three_counter
+                    self.active_player.free_three_counter
                 ):
                     print("Move violates double free three rule, try again")
                     continue
@@ -79,46 +73,40 @@ class TerminalGameplay(BaseGameplay):
                 print(f"Failed to get move: {e}, try again")
                 continue
 
-            board = board_new
+            self.board = board_new
 
             scores = {
-                k: players_hs[k](current_player.color, board)
+                k: players_hs[k](self.active_player.color, self.board)
                 for k in players_chars.keys()
             }
 
             self.print_info_after_move(
-                board,
-                current_player,
+                self.board,
                 players_chars,
                 players_timers,
                 (move_x, move_y),
                 scores,
             )
 
-            winner_color = board.winner(winner_heuristic)
+            winner_color = self.board.winner(winner_heuristic)
 
-            move_idx += 1
-
-            current_player_idx = (current_player_idx + 1) % 2
+            self.increment_move_index()
             yield None
 
         self.print_end_game_info(winner_color, players_chars)
-        board.print_board(players_chars)
+        self.board.print_board(players_chars)
         yield winner_color
 
-    @staticmethod
-    def print_info_before_move(board, current_player, players_chars):
+    def print_info_before_move(self, board, players_chars):
         print(
-            f'\nMove by player "{players_chars[current_player.color]}" , '
-            f"{type(current_player)}). Current board is:"
+            f"Move #{self.move_idx // 2} / {players_chars[self.active_player.color]}. Current board is:"
         )
         board.print_board(players_chars)
         print()
 
-    @staticmethod
     def print_info_after_move(
+        self,
         board,
-        current_player,
         players_chars,
         players_timers,
         move: tuple[int, int],
@@ -127,10 +115,10 @@ class TerminalGameplay(BaseGameplay):
         move_x, move_y = move
 
         print(
-            f'\nPlayer "{players_chars[current_player.color]}" is playing [{move_x}, {move_y}] '
-            f"after {players_timers[current_player.color][-1]}\n"
-            f"Mean time for move for player {players_chars[current_player.color]} "
-            f"= {np.mean(players_timers[current_player.color])}"
+            f'\nPlayer "{players_chars[self.active_player.color]}" is playing [{move_x}, {move_y}] '
+            f"after {players_timers[self.active_player.color][-1]}\n"
+            f"Mean time for move for player {players_chars[self.active_player.color]} "
+            f"= {np.mean(players_timers[self.active_player.color])}"
         )
 
         print(

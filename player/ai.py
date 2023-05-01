@@ -15,7 +15,7 @@ from player.base import Player
 free_three_counter = build_heuristic(None, Heuristics.free_three, line_len_to_analyze=6)
 
 
-def yield_completed(async_results: list[AsyncResult], positions: list):
+def yield_completed(positions: list, async_results: list[AsyncResult]):
     async_results_dict = {i: v for i, v in enumerate(async_results)}
     while len(async_results_dict) > 0:
         to_pop = None
@@ -103,7 +103,6 @@ def minimax(
         key=lambda p: p.h_val,
         reverse=is_maximizer,
     )
-    # next_positions = next_positions[:len(next_positions) // 3]
 
     if next_positions[0].h_val == win_value:
         next_positions = [next_positions[0]]
@@ -115,26 +114,27 @@ def minimax(
         alpha = alpha.value
         beta = beta.value
 
+    next_minimax_partial = partial(
+        minimax, 
+        not is_maximizer,
+        depth - 1,
+        alpha,
+        beta,
+        maximizer_color,
+        minimizer_color,
+        h_func)
+
     if is_maximizer:
         if pool is not None:
             results = [
                 pool.apply_async(
-                    minimax,
-                    args=(
-                        not is_maximizer,
-                        depth - 1,
-                        alpha,
-                        beta,
-                        maximizer_color,
-                        minimizer_color,
-                        h_func,
-                        next_position,
-                    ),
+                    next_minimax_partial,
+                    args=(next_position,),
                 )
                 for next_position in next_positions
             ]
 
-            for (score, _), next_position in yield_completed(results, next_positions):
+            for (score, _), next_position in yield_completed(next_positions, results):
                 if score > this_layer_best_score or this_layer_best_next_move is None:
                     this_layer_best_score = score
                     this_layer_best_next_move = next_position.from_move
@@ -147,16 +147,7 @@ def minimax(
 
         else:
             for next_position in next_positions:
-                score, _ = minimax(
-                    not is_maximizer,
-                    depth - 1,
-                    alpha,
-                    beta,
-                    maximizer_color,
-                    minimizer_color,
-                    h_func,
-                    next_position,
-                )
+                score, _ = next_minimax_partial(next_position)
 
                 if score > this_layer_best_score or this_layer_best_next_move is None:
                     this_layer_best_score = score
@@ -169,16 +160,7 @@ def minimax(
                     break
     else:
         for next_position in next_positions:
-            score, _ = minimax(
-                not is_maximizer,
-                depth - 1,
-                alpha,
-                beta,
-                maximizer_color,
-                minimizer_color,
-                h_func,
-                next_position,
-            )
+            score, _ = next_minimax_partial(next_position)
 
             if score < this_layer_best_score or this_layer_best_next_move is None:
                 this_layer_best_score = score

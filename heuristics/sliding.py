@@ -166,15 +166,13 @@ def is_free_three(color: None, line: tuple, whos_move: int) -> float:
         return 0
 
 
-def get_unique_lines_from_board(board: Board, line_len_to_analyze=5):
+def get_unique_lines_from_board(position: np.ndarray, line_len_to_analyze=5):
     (
         straight_line_indices_0,
         straight_line_indices_1,
         diag_indices_0,
         diag_indices_1,
     ) = get_board_sliding_indices(line_len_to_analyze)
-
-    position = board.position
 
     lines = np.concatenate(
         [
@@ -197,10 +195,10 @@ def apply_scalar_heuristic(
     line_len_to_analyze=5,
 ):
     unique_lines, unique_counts = get_unique_lines_from_board(
-        board, line_len_to_analyze=line_len_to_analyze
+        board.position, line_len_to_analyze=line_len_to_analyze
     )
 
-    result = sum(
+    result = np.sum(
         [
             h_fn(tuple(x), whos_move) * count
             for x, count in zip(unique_lines, unique_counts)

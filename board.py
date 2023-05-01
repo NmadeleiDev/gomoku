@@ -31,12 +31,12 @@ class Board:
     def __init__(
         self,
         position: Optional[np.ndarray] = None,
-        move_idx=0,
-        from_move=None,
-        last_move_color=None,
-        captures=None,
-        free_threes_count=None,
-        players_chars=None
+        move_idx: int = 0,
+        from_move: int=None,
+        last_move_color: int=None,
+        captures: dict[int, int]=None,
+        free_threes_count: dict[int, int]=None,
+        players_chars: dict[int, str]=None
     ):
         if position is not None:
             self.position = position

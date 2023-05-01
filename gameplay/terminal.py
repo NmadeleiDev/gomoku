@@ -94,15 +94,16 @@ class TerminalGameplay(BaseGameplay):
             yield None
 
         self.print_end_game_info(winner_color, players_chars)
-        self.board.print_board(players_chars)
+        self.board.players_chars = players_chars
+        print(self.board, '\n')
         yield winner_color
 
     def print_info_before_move(self, board, players_chars):
         print(
             f"Move #{self.move_idx // 2} / {players_chars[self.active_player.color]}. Current board is:"
         )
-        board.print_board(players_chars)
-        print()
+        board.players_chars = players_chars
+        print(board, '\n')
 
     def print_info_after_move(
         self,

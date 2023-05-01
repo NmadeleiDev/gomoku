@@ -293,7 +293,7 @@ class VisualGameplay(BaseGameplay):
         players_timers = {p.color: [] for p in self.players}
 
         while winner_color is None:
-            joblib.dump(self.board, f"./logs/board_at_move_{self.move_idx}.joblib")
+            self.board.dump(f'at_move_{self.move_idx}')
 
             try:
                 if isinstance(self.active_player, HumanPlayer):

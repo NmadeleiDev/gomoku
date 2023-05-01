@@ -103,8 +103,9 @@ def minimax(
         key=lambda p: p.h_val,
         reverse=is_maximizer,
     )
+    # next_positions = next_positions[:len(next_positions) // 3]
 
-    if next_positions[0] == win_value:
+    if next_positions[0].h_val == win_value:
         next_positions = [next_positions[0]]
 
     this_layer_best_score = -win_value
@@ -196,7 +197,9 @@ class AIPlayer(Player):
     def __init__(self, color):
         super().__init__(color)
 
-        self.calculation_depth = int(os.getenv("DEPTH", "2"))
+        self.calculation_depth = int(os.getenv("DEPTH", "3"))
+
+        self.h = build_heuristic(self.color, Heuristics.count)
 
         self.max_workers = os.cpu_count()
 
@@ -222,9 +225,6 @@ class AIPlayer(Player):
     def start_game(self):
         self.manager = Manager()
         self.pool = self.manager.Pool(processes=self.max_workers)
-        # self.pool = None
-        pass
 
     def end_game(self):
         self.manager.shutdown()
-        # self.pool.close()

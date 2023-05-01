@@ -193,7 +193,9 @@ class BenchmarkPlayer(Player):
     def __init__(self, color):
         super().__init__(color)
 
-        self.calculation_depth = int(os.getenv("DEPTH", "2"))
+        self.calculation_depth = int(os.getenv("DEPTH", "3"))
+
+        self.h = build_heuristic(self.color, Heuristics.count)
 
         self.max_workers = os.cpu_count()
 

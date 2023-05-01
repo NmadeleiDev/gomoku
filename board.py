@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from hashlib import md5
 from typing import Callable, Optional
+import joblib
 
 import numpy as np
 import tabulate
@@ -35,6 +36,7 @@ class Board:
         last_move_color=None,
         captures=None,
         free_threes_count=None,
+        players_chars=None
     ):
         if position is not None:
             self.position = position
@@ -51,6 +53,7 @@ class Board:
         self.free_threes_count = (
             free_threes_count.copy() if free_threes_count is not None else {}
         )
+        self.players_chars = players_chars
 
     def is_point_on_board(self, x: int, y: int) -> bool:
         return 0 <= x < self.position.shape[0] and 0 <= y < self.position.shape[1]
@@ -181,15 +184,21 @@ class Board:
             return False
         return (other.position == self.position).all()
 
-    def print_board(self, players_chars: dict[int, str]):
+    def __str__(self) -> str:
         board_position_copy = self.position.copy().astype(object)
         board_position_copy.flags.writeable = True
 
-        for color, char in (players_chars | {0: "."}).items():
+        for color, char in (self.players_chars | {0: "."}).items():
             board_position_copy[board_position_copy == color] = char
 
-        print(
-            tabulate.tabulate(
+        return tabulate.tabulate(
                 board_position_copy, headers="keys", stralign="center", showindex=True
             )
-        )
+
+    def dump(self, suffix:str=''):
+        joblib.dump(self, f"./logs/board_{suffix}.joblib")
+
+    @staticmethod
+    def load(checkpoint_path:str) -> Board:
+        return joblib.load(checkpoint_path)
+    

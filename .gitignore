@@ -2,3 +2,8 @@ experiments.ipynb
 experiments.py
 __pycache__/
 logs/
+.pytest_cache/
+.idea/
+.vscode/
+.DS_Store/
+.DS_Store

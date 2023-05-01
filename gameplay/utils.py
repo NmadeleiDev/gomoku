@@ -7,4 +7,5 @@ def clear_previous_game_logs():
 
     for name in os.listdir("../logs"):
         if name.endswith(".joblib"):
-            os.unlink(os.path.join("../logs", name))
+            os.remove(os.path.join("../logs", name))
+            print('removed', os.path.join("../logs", name))

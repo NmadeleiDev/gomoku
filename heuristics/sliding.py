@@ -7,7 +7,6 @@ from cachetools import cached
 
 from board import Board
 
-winning_line_len = 5
 power_foundation = Board.size
 
 
@@ -51,12 +50,12 @@ def score_for_line_hamming(color: int, line: tuple) -> float:
     for color_in_line in np.unique(line):
         if color_in_line == Board.empty_color:
             continue
-        win_line_for_color = np.empty((winning_line_len,))
+        win_line_for_color = np.empty((len(line),))
         win_line_for_color.fill(color_in_line)
         ham_sim = hamming_similarity(
             line, win_line_for_color
         )  # TODO различие с пустым местом и камнем оппонента учитывать по-разному
-        score = (power_foundation**ham_sim) if ham_sim < winning_line_len else np.inf
+        score = (power_foundation**ham_sim) if ham_sim < len(line) else np.inf
         result += score * (1 if color_in_line == color else -1)
 
     return result
@@ -100,7 +99,7 @@ def score_for_line_count_with_move(color: int, line: tuple, whos_move: int) -> f
             score = np.inf
 
     if score is None:
-        score = (power_foundation**count) if count < winning_line_len else np.inf
+        score = (power_foundation**count) if count < len(line) else np.inf
 
     return score * (1 if is_this_color_line else -1)
 
@@ -122,7 +121,7 @@ def score_for_line_count(color: int, line: tuple, whos_move: int) -> float:
 
     count = np.sum(line != Board.empty_color)
 
-    score = (power_foundation**count) if count < winning_line_len else np.inf
+    score = (power_foundation**count) if count < len(line) else np.inf
 
     return score * (1 if is_this_color_line else -1)
 

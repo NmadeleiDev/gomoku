@@ -6,7 +6,6 @@ from multiprocessing.pool import AsyncResult
 
 import numpy as np
 from cachetools import cached
-from traig_client.client import get_client as traig_client
 
 from board import Board
 from heuristics.sliding import Heuristics, build_heuristic
@@ -184,10 +183,6 @@ class AIPlayer(Player):
         self.h = build_heuristic(self.color, Heuristics.count)
 
         self.max_workers = os.cpu_count()
-
-        traig_client().update_metrics(
-            **{f"color_{self.color}_calc_depth": self.calculation_depth}
-        )
 
     def get_move(self, position: Board) -> tuple[int, int]:
         _, best_next_move = minimax(

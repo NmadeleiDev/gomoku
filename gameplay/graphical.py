@@ -8,8 +8,6 @@ from tkinter import Tk
 import joblib
 import numpy as np
 from PIL import Image, ImageEnhance, ImageTk
-from traig_client.client import MetricTypeEnum as TraigMetricTypeEnum
-from traig_client.client import get_client as traig_client
 
 from board import Board
 from gameplay.base import BaseGameplay
@@ -26,22 +24,6 @@ OFFSET = (SIZE - SIZE * BOARD_ZOOM_FACTOR) * 1.4 / 2
 PLAYING_BOARD_PART_SIZE = SIZE * BOARD_ZOOM_FACTOR * 0.984
 STEP_SIZE = PLAYING_BOARD_PART_SIZE / Board.size
 FIELD_SIZE = STEP_SIZE / 2
-
-
-def init_traig_client():
-    traig_client().init_metrics(
-        player_X_mean_move_time=TraigMetricTypeEnum.mean.value,
-        player_O_mean_move_time=TraigMetricTypeEnum.mean.value,
-        mean_move_time=TraigMetricTypeEnum.mean.value,
-        n_moves=TraigMetricTypeEnum.count.value,
-        who_won=TraigMetricTypeEnum.value.value,
-        **{
-            "color_-1_calc_depth": TraigMetricTypeEnum.value.value,
-            "color_1_calc_depth": TraigMetricTypeEnum.value.value,
-        },
-    )
-
-    logging.debug(f"traig client is {traig_client()}")
 
 
 class VisualGameplay(BaseGameplay):

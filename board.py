@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import tabulate
 
+from exceptions import IllegalMove
+
 unary_step_vectors = np.array(
     [
         [1, 0],
@@ -78,7 +80,7 @@ class Board:
 
     def get_board_after_move(self, x: int, y: int, color: int) -> Board:
         if not self.is_point_empty(x, y):
-            raise ValueError("illegal move")
+            raise IllegalMove("illegal move")
         result = self.position.copy()
         result.flags.writeable = True
         result[x, y] = color

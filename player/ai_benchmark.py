@@ -213,7 +213,7 @@ class BenchmarkPlayer(Player):
             self.opponent_color,
             self.h,
             position,
-            pool=self.pool,
+            # pool=self.pool,
         )
 
         return best_next_move

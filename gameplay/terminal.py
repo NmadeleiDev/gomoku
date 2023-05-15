@@ -4,6 +4,7 @@ import joblib
 import numpy as np
 
 from board import Board
+from exceptions import IllegalInput
 from gameplay.base import BaseGameplay
 from gameplay.utils import clear_previous_game_logs
 from heuristics.sliding import Heuristics, build_heuristic
@@ -21,11 +22,11 @@ class TerminalGameplay(BaseGameplay):
         try:
             x, y = [int(i.strip()) for i in move]
         except Exception:
-            raise ValueError("Invalid input")
+            raise IllegalInput("Invalid input")
 
         for inp in (x, y):
             if inp >= Board.size or inp < 0:
-                raise ValueError(f"Coordinates must be in [0:{Board.size - 1}]")
+                raise IllegalInput(f"Coordinates must be in [0:{Board.size - 1}]")
         return x, y
 
     def start(self):
@@ -69,7 +70,7 @@ class TerminalGameplay(BaseGameplay):
                 ):
                     print("Move violates double free three rule, try again")
                     continue
-            except ValueError as e:
+            except IllegalInput as e:
                 print(f"Failed to get move: {e}, try again")
                 continue
 

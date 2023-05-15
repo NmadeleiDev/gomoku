@@ -1,4 +1,5 @@
 from board import Board
+from exceptions import IllegalInput
 from player.base import Player
 
 
@@ -10,11 +11,11 @@ def terminal_input_move_getter(*args):
     try:
         x, y = [int(i.strip()) for i in move]
     except Exception:
-        raise ValueError("Invalid input")
+        raise IllegalInput("Invalid input")
 
     for inp in (x, y):
         if inp >= Board.size or inp < 0:
-            raise ValueError("Coordinates must be in [0:19]")
+            raise IllegalInput("Coordinates must be in [0:19]")
     return x, y
 
 

@@ -12,6 +12,7 @@ from traig_client.client import MetricTypeEnum as TraigMetricTypeEnum
 from traig_client.client import get_client as traig_client
 
 from board import Board
+from exceptions import IllegalMove
 from gameplay.base import BaseGameplay
 from gameplay.utils import clear_previous_game_logs
 from player.human import HumanPlayer
@@ -341,7 +342,7 @@ class VisualGameplay(BaseGameplay):
                     self.place_error_img(move_x, move_y)
                     yield None
                     continue
-            except ValueError as e:
+            except IllegalMove as e:
                 print(f"Failed to get move: {e}, try again")
                 yield None
                 continue

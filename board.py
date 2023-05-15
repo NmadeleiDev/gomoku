@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from hashlib import md5
 from typing import Callable, Optional
-import joblib
 
+import joblib
 import numpy as np
 import tabulate
 
@@ -32,11 +32,11 @@ class Board:
         self,
         position: Optional[np.ndarray] = None,
         move_idx: int = 0,
-        from_move: int=None,
-        last_move_color: int=None,
-        captures: dict[int, int]=None,
-        free_threes_count: dict[int, int]=None,
-        players_chars: dict[int, str]=None
+        from_move: int = None,
+        last_move_color: int = None,
+        captures: dict[int, int] = None,
+        free_threes_count: dict[int, int] = None,
+        players_chars: dict[int, str] = None,
     ):
         if position is not None:
             self.position = position
@@ -192,13 +192,12 @@ class Board:
             board_position_copy[board_position_copy == color] = char
 
         return tabulate.tabulate(
-                board_position_copy, headers="keys", stralign="center", showindex=True
-            )
+            board_position_copy, headers="keys", stralign="center", showindex=True
+        )
 
-    def dump(self, suffix:str=''):
+    def dump(self, suffix: str = ""):
         joblib.dump(self, f"./logs/board_{suffix}.joblib")
 
     @staticmethod
-    def load(checkpoint_path:str) -> Board:
+    def load(checkpoint_path: str) -> Board:
         return joblib.load(checkpoint_path)
-    

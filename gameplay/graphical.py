@@ -1,11 +1,9 @@
-import logging
 import tkinter
 import tkinter as tk
 from datetime import datetime, timedelta
 from queue import Queue
 from tkinter import Tk
 
-import joblib
 import numpy as np
 from PIL import Image, ImageEnhance, ImageTk
 
@@ -275,7 +273,7 @@ class VisualGameplay(BaseGameplay):
         players_timers = {p.color: [] for p in self.players}
 
         while winner_color is None:
-            self.board.dump(f'at_move_{self.move_idx}')
+            self.board.dump(f"at_move_{self.move_idx}")
 
             try:
                 if isinstance(self.active_player, HumanPlayer):

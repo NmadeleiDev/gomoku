@@ -114,14 +114,15 @@ def minimax(
         beta = beta.value
 
     next_minimax_partial = partial(
-        minimax, 
+        minimax,
         not is_maximizer,
         depth - 1,
         alpha,
         beta,
         maximizer_color,
         minimizer_color,
-        h_func)
+        h_func,
+    )
 
     if is_maximizer:
         if pool is not None:

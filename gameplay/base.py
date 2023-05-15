@@ -35,8 +35,8 @@ class BaseGameplay(ABC):
         self.game_iterator_instance = self.game_iterator()
         self.board = Board()
 
-        print(f'player 1: type={type(self.player_1)}, h={type(self.player_1.h)}')
-        print(f'player 2: type={type(self.player_2)}, h={type(self.player_2.h)}')
+        print(f"player 1: type={type(self.player_1)}, h={type(self.player_1.h)}")
+        print(f"player 2: type={type(self.player_2)}, h={type(self.player_2.h)}")
 
     def end_game(self):
         self.player_1.end_game()

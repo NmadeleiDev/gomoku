@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import md5
+import os
 from typing import Callable, Optional
 
 import joblib
@@ -196,6 +197,8 @@ class Board:
         )
 
     def dump(self, suffix: str = ""):
+        if not os.path.isdir("./logs"):
+            os.makedirs("./logs")
         joblib.dump(self, f"./logs/board_{suffix}.joblib")
 
     @staticmethod
